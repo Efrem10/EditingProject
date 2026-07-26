@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+<<<<<<< HEAD
 from database import Base, engine
 
 from models.user import User
@@ -61,6 +62,14 @@ app.mount(
     StaticFiles(directory="uploads"),
     name="uploads"
 )
+=======
+
+
+
+app = FastAPI()
+
+
+>>>>>>> de8c0c2e7c8f45349a0e01d96f0ddd0d4fa2407b
 origins = [
     "http://localhost:3000",
     "http://localhost:5173",
@@ -68,7 +77,10 @@ origins = [
     "http://localhost:3003",
     "https://editingpro.netlify.app",
 ]
+<<<<<<< HEAD
 
+=======
+>>>>>>> de8c0c2e7c8f45349a0e01d96f0ddd0d4fa2407b
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -84,12 +96,20 @@ def home():
         "message": "Welcome to EditingPro!"
     }
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> de8c0c2e7c8f45349a0e01d96f0ddd0d4fa2407b
 @app.get("/about")
 def about():
     return {
         "about": "We provide professional editing services."
     }
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> de8c0c2e7c8f45349a0e01d96f0ddd0d4fa2407b
 @app.get("/services")
 def services():
     return {
@@ -101,10 +121,20 @@ def services():
         ]
     }
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> de8c0c2e7c8f45349a0e01d96f0ddd0d4fa2407b
 @app.get("/contact")
 def contact():
     return {
         "phone": "+251900000000",
         "email": "info@editpro.com",
         "address": "Addis Ababa, Ethiopia"
+<<<<<<< HEAD
     }
+=======
+    }
+
+
+>>>>>>> de8c0c2e7c8f45349a0e01d96f0ddd0d4fa2407b
