@@ -65,7 +65,8 @@ origins = [
     "http://localhost:3000",
     "http://localhost:5173",
     "http://localhost:3001",
-    "http://localhost:3003",
+    "http://localhost:3003",   # Vite
+    "http://localhost:5680",
     "https://editingpro.netlify.app",
 ]
 app.add_middleware(
