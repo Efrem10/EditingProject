@@ -28,7 +28,7 @@ router = APIRouter(
 
 
 # Google OAuth Client ID from Firebase Console
-GOOGLE_CLIENT_ID = os.getenv("657002186776-fb7tdtcqeu6lcbahmap9e2c73omo5589.apps.googleusercontent.com")
+GOOGLE_CLIENT_ID ="657002186776-fb7tdtcqeu6lcbahmap9e2c73omo5589.apps.googleusercontent.com"
 
 
 if not GOOGLE_CLIENT_ID:
