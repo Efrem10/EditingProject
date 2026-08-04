@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-import os
 
-from google.oauth2 import id_token
-from google.auth.transport import requests
+import firebase_admin
+from firebase_admin import auth as firebase_auth
+from firebase_admin import credentials
+
+import firebase_config
 
 from database import get_db
 from models.user import User
@@ -21,87 +23,80 @@ from auth.dependencies import get_current_user
 from auth.jwt import create_access_token
 
 
+# ==================================================
+# FIREBASE INITIALIZATION
+# ==================================================
+
+if not firebase_admin._apps:
+    cred = credentials.Certificate("firebase-service-account.json")
+    firebase_admin.initialize_app(cred)
+
+
 router = APIRouter(
     prefix="/auth",
-    tags=["Authentication"]
+    tags=["Authentication"],
 )
 
 
-# Google OAuth Client ID from Firebase Console
-GOOGLE_CLIENT_ID ="657002186776-fb7tdtcqeu6lcbahmap9e2c73omo5589.apps.googleusercontent.com"
-
-
-if not GOOGLE_CLIENT_ID:
-    raise Exception(
-        "GOOGLE_CLIENT_ID environment variable is missing"
-    )
-
-
+# ==================================================
+# CURRENT USER
+# ==================================================
 
 @router.get("/me")
-def get_me(
-    current_user: dict = Depends(get_current_user)
-):
+def get_me(current_user: dict = Depends(get_current_user)):
     return current_user
 
 
-
-
-# ==========================
-# NORMAL REGISTER
-# ==========================
+# ==================================================
+# REGISTER
+# ==================================================
 
 @router.post(
     "/register",
-    response_model=UserResponse
+    response_model=UserResponse,
 )
 def register(
     user: UserCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
 
-    existing = db.query(User).filter(
-        User.email == user.email
-    ).first()
-
+    existing = (
+        db.query(User)
+        .filter(User.email == user.email)
+        .first()
+    )
 
     if existing:
         raise HTTPException(
             status_code=400,
-            detail="Email already exists"
+            detail="Email already exists",
         )
-
 
     new_user = User(
         full_name=user.full_name,
         email=user.email,
         password=hash_password(user.password),
-        role="student"
+        role="student",
     )
-
 
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-
     return new_user
 
 
-
-
-
-# ==========================
-# NORMAL LOGIN
-# ==========================
+# ==================================================
+# EMAIL LOGIN
+# ==================================================
 
 @router.post(
     "/login",
-    response_model=Token
+    response_model=Token,
 )
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
 
     db_user = (
@@ -110,38 +105,28 @@ def login(
         .first()
     )
 
-
     if not db_user:
         raise HTTPException(
             status_code=401,
-            detail="Incorrect email or password"
+            detail="Incorrect email or password",
         )
 
-
-
-    # Google users don't have password
     if db_user.password is None:
-
         raise HTTPException(
             status_code=401,
-            detail="This account uses Google Sign-In."
+            detail="This account uses Google Sign-In.",
         )
-
-
 
     if not verify_password(
         form_data.password,
-        db_user.password
+        db_user.password,
     ):
-
         raise HTTPException(
             status_code=401,
-            detail="Incorrect email or password"
+            detail="Incorrect email or password",
         )
 
-
-
-    token = create_access_token(
+    access_token = create_access_token(
         data={
             "sub": db_user.email,
             "user_id": db_user.id,
@@ -149,160 +134,104 @@ def login(
         }
     )
 
-
-
     return {
-        "access_token": token,
+        "access_token": access_token,
         "token_type": "bearer",
     }
 
 
-
-
-
-
-# ==========================
-# GOOGLE LOGIN
-# ==========================
+# ==================================================
+# GOOGLE LOGIN (FIREBASE)
+# ==================================================
 
 @router.post(
     "/google",
-    response_model=Token
+    response_model=Token,
 )
 def google_login(
     data: GoogleLogin,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
 
     try:
-
-        google_user = id_token.verify_oauth2_token(
-            data.id_token,
-            requests.Request(),
-            GOOGLE_CLIENT_ID
+        decoded_token = firebase_auth.verify_id_token(
+            data.id_token
         )
-
 
     except Exception:
-
         raise HTTPException(
             status_code=401,
-            detail="Invalid Google token"
+            detail="Invalid Firebase token",
         )
 
+    email = decoded_token.get("email")
 
+    if email is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Email not found in token",
+        )
 
-    email = google_user.get("email")
-
-    full_name = google_user.get(
+    full_name = decoded_token.get(
         "name",
-        "Google User"
+        "Google User",
     )
 
-    google_id = google_user.get(
-        "sub"
-    )
+    firebase_uid = decoded_token.get("uid")
 
-    profile_picture = google_user.get(
-        "picture"
-    )
-
+    profile_picture = decoded_token.get("picture")
 
 
     user = (
         db.query(User)
-        .filter(
-            User.email == email
-        )
+        .filter(User.email == email)
         .first()
     )
 
-
-
-    # New Google user
-
     if user is None:
 
-
         user = User(
-
             full_name=full_name,
-
             email=email,
-
             password=None,
-
             role="student",
-
-            google_id=google_id,
-
-            profile_picture=profile_picture
-
+            google_id=firebase_uid,
+            profile_picture=profile_picture,
         )
 
-
         db.add(user)
-
         db.commit()
-
         db.refresh(user)
-
-
-
-    # Existing user
 
     else:
 
-
         changed = False
 
-
-
         if not user.google_id:
-
-            user.google_id = google_id
-
+            user.google_id = firebase_uid
             changed = True
 
-
-
-        if profile_picture:
-
+        if profile_picture and user.profile_picture != profile_picture:
             user.profile_picture = profile_picture
-
             changed = True
 
-
+        if full_name and user.full_name != full_name:
+            user.full_name = full_name
+            changed = True
 
         if changed:
-
             db.commit()
-
             db.refresh(user)
 
-
-
-
-    token = create_access_token(
-
+    access_token = create_access_token(
         data={
-
             "sub": user.email,
-
             "user_id": user.id,
-
             "role": user.role,
-
         }
-
     )
 
-
-
     return {
-
-        "access_token": token,
-
-        "token_type": "bearer"
-
+        "access_token": access_token,
+        "token_type": "bearer",
     }
