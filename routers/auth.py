@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+import os
 
 from google.oauth2 import id_token
 from google.auth.transport import requests
@@ -25,7 +26,11 @@ router = APIRouter(
 )
 
 # Replace this with your Google OAuth Client ID
-GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID"
+
+
+GOOGLE_CLIENT_ID = os.getenv(
+    "GOOGLE_CLIENT_ID"
+)
 
 
 @router.get("/me")
