@@ -12,7 +12,7 @@ def upload_video_to_cloudinary(file_path: str):
         file_path,
         resource_type="video",
         folder="EditingPro/videos",
-        chunk_size=6000000,
+        chunk_size=6_000_000,
     )
 
     return {
@@ -29,6 +29,9 @@ def upload_video_to_cloudinary(file_path: str):
 
 def delete_video_from_cloudinary(public_id: str):
 
+    if not public_id:
+        return None
+
     return cloudinary.uploader.destroy(
         public_id,
         resource_type="video",
@@ -36,7 +39,7 @@ def delete_video_from_cloudinary(public_id: str):
 
 
 # ============================================================
-# UPLOAD COURSE THUMBNAIL
+# UPLOAD COURSE THUMBNAIL / IMAGE
 # ============================================================
 
 def upload_image_to_cloudinary(file_path: str):
@@ -57,10 +60,13 @@ def upload_image_to_cloudinary(file_path: str):
 
 
 # ============================================================
-# DELETE COURSE THUMBNAIL
+# DELETE COURSE THUMBNAIL / IMAGE
 # ============================================================
 
 def delete_image_from_cloudinary(public_id: str):
+
+    if not public_id:
+        return None
 
     return cloudinary.uploader.destroy(
         public_id,
