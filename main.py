@@ -14,6 +14,7 @@ from models.review import Review
 from models.live_class import LiveClass
 from models.settings import Settings
 from models.purchase import Purchase
+from models.section import Section
 
 from routers.auth import router as auth_router
 from routers.course import router as course_router
@@ -31,6 +32,7 @@ from routers.settings import router as settings_router
 from routers.student_lessons import router as student_router
 from routers.student_courses import router as student_courses_router
 from routers.purchases import router as purchases_router
+from routers.section import router as section_router
 
 from fastapi.staticfiles import StaticFiles
 
@@ -53,6 +55,7 @@ app.include_router(settings_router)
 app.include_router(student_router)
 app.include_router(student_courses_router)
 app.include_router(purchases_router)
+app.include_router(section_router)
 
 Base.metadata.create_all(bind=engine)
 

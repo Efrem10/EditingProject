@@ -17,11 +17,13 @@ from sqlalchemy.exc import SQLAlchemyError
 from database import get_db
 
 from models.course import Course
+from models.section import Section
 
 from schemas.course import (
     CourseResponse,
     CourseCreate,
     CourseDetailResponse,
+    SectionResponse,
 )
 
 from auth.dependencies import admin_required
@@ -58,6 +60,7 @@ def create_course(
         new_course = Course(
             title=course.title,
             description=course.description,
+            detailed_description=course.detailed_description,
             price=course.price,
             category=course.category,
             created_by=current_user["id"],
@@ -76,11 +79,365 @@ def create_course(
 
         db.rollback()
 
-        print("CREATE COURSE ERROR:", e)
+        print(
+            "CREATE COURSE ERROR:",
+            e,
+        )
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create course.",
+        )
+
+
+# ============================================================
+# CREATE SECTION
+#
+# POST /course/{course_id}/sections
+#
+# Example JSON:
+#
+# {
+#     "section_number": 1,
+#     "title": "Introduction",
+#     "description": "Introduction to this course."
+# }
+# ============================================================
+
+@router.post(
+    "/{course_id}/sections",
+    response_model=SectionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_section(
+    course_id: int,
+    section: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(admin_required),
+):
+
+    # --------------------------------------------------------
+    # CHECK COURSE
+    # --------------------------------------------------------
+
+    course = (
+        db.query(Course)
+        .filter(Course.id == course_id)
+        .first()
+    )
+
+    if not course:
+
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found.",
+        )
+
+    # --------------------------------------------------------
+    # READ SECTION DATA
+    # --------------------------------------------------------
+
+    section_number = section.get("section_number")
+    title = section.get("title")
+    description = section.get("description")
+
+    if section_number is None:
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="section_number is required.",
+        )
+
+    if not title:
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Section title is required.",
+        )
+
+    # --------------------------------------------------------
+    # CHECK DUPLICATE SECTION NUMBER
+    # --------------------------------------------------------
+
+    existing_section = (
+        db.query(Section)
+        .filter(
+            Section.course_id == course_id,
+            Section.section_number == section_number,
+        )
+        .first()
+    )
+
+    if existing_section:
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Section {section_number} already exists "
+                "in this course."
+            ),
+        )
+
+    # --------------------------------------------------------
+    # CREATE SECTION
+    # --------------------------------------------------------
+
+    new_section = Section(
+        course_id=course_id,
+        section_number=section_number,
+        title=title,
+        description=description,
+    )
+
+    try:
+
+        db.add(new_section)
+
+        db.commit()
+
+        db.refresh(new_section)
+
+        return new_section
+
+    except SQLAlchemyError as e:
+
+        db.rollback()
+
+        print(
+            "CREATE SECTION ERROR:",
+            e,
+        )
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create section.",
+        )
+
+
+# ============================================================
+# GET COURSE SECTIONS
+#
+# GET /course/{course_id}/sections
+# ============================================================
+
+@router.get(
+    "/{course_id}/sections",
+    response_model=list[SectionResponse],
+)
+def get_course_sections(
+    course_id: int,
+    db: Session = Depends(get_db),
+):
+
+    # --------------------------------------------------------
+    # CHECK COURSE
+    # --------------------------------------------------------
+
+    course = (
+        db.query(Course)
+        .filter(Course.id == course_id)
+        .first()
+    )
+
+    if not course:
+
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found.",
+        )
+
+    # --------------------------------------------------------
+    # GET SECTIONS
+    # --------------------------------------------------------
+
+    sections = (
+        db.query(Section)
+        .filter(
+            Section.course_id == course_id
+        )
+        .order_by(
+            Section.section_number.asc()
+        )
+        .all()
+    )
+
+    return sections
+
+
+# ============================================================
+# UPDATE SECTION
+#
+# PUT /course/sections/{section_id}
+# ============================================================
+
+@router.put(
+    "/sections/{section_id}",
+    response_model=SectionResponse,
+)
+def update_section(
+    section_id: int,
+    section: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(admin_required),
+):
+
+    db_section = (
+        db.query(Section)
+        .filter(Section.id == section_id)
+        .first()
+    )
+
+    if not db_section:
+
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Section not found.",
+        )
+
+    # --------------------------------------------------------
+    # UPDATE SECTION NUMBER
+    # --------------------------------------------------------
+
+    if section.get("section_number") is not None:
+
+        new_number = section.get(
+            "section_number"
+        )
+
+        # Check duplicate number
+        duplicate = (
+            db.query(Section)
+            .filter(
+                Section.course_id == db_section.course_id,
+                Section.section_number == new_number,
+                Section.id != section_id,
+            )
+            .first()
+        )
+
+        if duplicate:
+
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Section {new_number} already exists "
+                    "in this course."
+                ),
+            )
+
+        db_section.section_number = new_number
+
+    # --------------------------------------------------------
+    # UPDATE TITLE
+    # --------------------------------------------------------
+
+    if section.get("title") is not None:
+
+        title = section.get("title")
+
+        if not title.strip():
+
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Section title cannot be empty.",
+            )
+
+        db_section.title = title
+
+    # --------------------------------------------------------
+    # UPDATE DESCRIPTION
+    # --------------------------------------------------------
+
+    if "description" in section:
+
+        db_section.description = (
+            section.get("description")
+        )
+
+    try:
+
+        db.commit()
+
+        db.refresh(db_section)
+
+        return db_section
+
+    except SQLAlchemyError as e:
+
+        db.rollback()
+
+        print(
+            "UPDATE SECTION ERROR:",
+            e,
+        )
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update section.",
+        )
+
+
+# ============================================================
+# DELETE SECTION
+#
+# DELETE /course/sections/{section_id}
+#
+# The Section model has:
+#
+# lessons = relationship(
+#     "Lesson",
+#     back_populates="section",
+#     cascade="all, delete-orphan"
+# )
+#
+# Therefore deleting a section deletes its lessons.
+# ============================================================
+
+@router.delete(
+    "/sections/{section_id}"
+)
+def delete_section(
+    section_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(admin_required),
+):
+
+    section = (
+        db.query(Section)
+        .filter(Section.id == section_id)
+        .first()
+    )
+
+    if not section:
+
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Section not found.",
+        )
+
+    try:
+
+        db.delete(section)
+
+        db.commit()
+
+        return {
+            "message": "Section deleted successfully.",
+            "section_id": section_id,
+        }
+
+    except SQLAlchemyError as e:
+
+        db.rollback()
+
+        print(
+            "DELETE SECTION ERROR:",
+            e,
+        )
+
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete section.",
         )
 
 
@@ -91,11 +448,11 @@ def create_course(
 #
 # Form-data:
 # file = image
-#
-# Image is stored permanently on Cloudinary.
 # ============================================================
 
-@router.post("/{course_id}/thumbnail")
+@router.post(
+    "/{course_id}/thumbnail"
+)
 async def upload_thumbnail(
     course_id: int,
     file: UploadFile = File(...),
@@ -152,20 +509,19 @@ async def upload_thumbnail(
             ),
         )
 
-    # --------------------------------------------------------
-    # CREATE TEMPORARY FILE
-    # --------------------------------------------------------
-
     temp_path = None
 
     try:
 
-        # Create a temporary file.
-        # This avoids depending on a permanent local uploads folder.
+        # ----------------------------------------------------
+        # CREATE TEMPORARY FILE
+        # ----------------------------------------------------
 
         with tempfile.NamedTemporaryFile(
             delete=False,
-            suffix=os.path.splitext(file.filename)[1],
+            suffix=os.path.splitext(
+                file.filename
+            )[1],
         ) as temp_file:
 
             temp_path = temp_file.name
@@ -176,16 +532,12 @@ async def upload_thumbnail(
             )
 
         # ----------------------------------------------------
-        # UPLOAD NEW IMAGE TO CLOUDINARY FIRST
+        # UPLOAD TO CLOUDINARY
         # ----------------------------------------------------
 
         result = upload_image_to_cloudinary(
             temp_path
         )
-
-        # ----------------------------------------------------
-        # VERIFY CLOUDINARY RESULT
-        # ----------------------------------------------------
 
         if not result:
 
@@ -193,10 +545,18 @@ async def upload_thumbnail(
                 "Cloudinary returned an empty response."
             )
 
-        new_secure_url = result.get("secure_url")
-        new_public_id = result.get("public_id")
+        new_secure_url = result.get(
+            "secure_url"
+        )
 
-        if not new_secure_url or not new_public_id:
+        new_public_id = result.get(
+            "public_id"
+        )
+
+        if (
+            not new_secure_url
+            or not new_public_id
+        ):
 
             raise Exception(
                 "Cloudinary upload did not return "
@@ -204,33 +564,35 @@ async def upload_thumbnail(
             )
 
         # ----------------------------------------------------
-        # SAVE OLD VALUES
+        # SAVE OLD PUBLIC ID
         # ----------------------------------------------------
 
-        old_public_id = course.thumbnail_public_id
+        old_public_id = (
+            course.thumbnail_public_id
+        )
 
         # ----------------------------------------------------
-        # SAVE NEW CLOUDINARY URL
+        # SAVE NEW IMAGE
         # ----------------------------------------------------
 
         course.thumbnail = new_secure_url
 
-        course.thumbnail_public_id = new_public_id
+        course.thumbnail_public_id = (
+            new_public_id
+        )
 
         db.commit()
 
         db.refresh(course)
 
         # ----------------------------------------------------
-        # DELETE OLD CLOUDINARY IMAGE
-        #
-        # IMPORTANT:
-        # We delete the old image ONLY after the new image
-        # has successfully uploaded and the database has
-        # successfully saved the new URL.
+        # DELETE OLD IMAGE
         # ----------------------------------------------------
 
-        if old_public_id and old_public_id != new_public_id:
+        if (
+            old_public_id
+            and old_public_id != new_public_id
+        ):
 
             try:
 
@@ -245,15 +607,16 @@ async def upload_thumbnail(
                     e,
                 )
 
-        # ----------------------------------------------------
-        # SUCCESS
-        # ----------------------------------------------------
-
         return {
-            "message": "Course thumbnail uploaded successfully.",
+            "message": (
+                "Course thumbnail uploaded "
+                "successfully."
+            ),
             "course_id": course.id,
             "thumbnail": course.thumbnail,
-            "thumbnail_public_id": course.thumbnail_public_id,
+            "thumbnail_public_id": (
+                course.thumbnail_public_id
+            ),
         }
 
     except SQLAlchemyError as e:
@@ -287,10 +650,13 @@ async def upload_thumbnail(
     finally:
 
         # ----------------------------------------------------
-        # DELETE TEMPORARY FILE
+        # DELETE TEMP FILE
         # ----------------------------------------------------
 
-        if temp_path and os.path.exists(temp_path):
+        if (
+            temp_path
+            and os.path.exists(temp_path)
+        ):
 
             try:
 
@@ -316,6 +682,22 @@ async def upload_thumbnail(
 # GET ONE COURSE
 #
 # GET /course/{course_id}
+#
+# Returns:
+#
+# Course
+#   ├── description
+#   ├── detailed_description
+#   ├── sections
+#   │     ├── section 1
+#   │     │     ├── lesson 1
+#   │     │     └── lesson 2
+#   │     └── section 2
+#   │           ├── lesson 1
+#   │           └── lesson 2
+#   │
+#   └── lessons
+#
 # ============================================================
 
 @router.get(
@@ -359,7 +741,9 @@ def get_courses(
 
     courses = (
         db.query(Course)
-        .order_by(Course.created_at.desc())
+        .order_by(
+            Course.created_at.desc()
+        )
         .all()
     )
 
@@ -369,9 +753,16 @@ def get_courses(
 # ============================================================
 # UPDATE COURSE
 #
-# Thumbnail is updated separately:
+# PUT /course/{course_id}
 #
-# POST /course/{course_id}/thumbnail
+# Updates:
+# - title
+# - short description
+# - detailed description
+# - price
+# - category
+#
+# Thumbnail is updated separately.
 # ============================================================
 
 @router.put(
@@ -403,8 +794,17 @@ def update_course(
     # --------------------------------------------------------
 
     db_course.title = course.title
-    db_course.description = course.description
+
+    db_course.description = (
+        course.description
+    )
+
+    db_course.detailed_description = (
+        course.detailed_description
+    )
+
     db_course.price = course.price
+
     db_course.category = course.category
 
     try:
@@ -433,10 +833,20 @@ def update_course(
 # ============================================================
 # DELETE COURSE
 #
-# Also deletes its Cloudinary thumbnail.
+# DELETE /course/{course_id}
+#
+# Course
+#    ↓
+# Sections
+#    ↓
+# Lessons
+#
+# are removed through the relationships/cascade.
 # ============================================================
 
-@router.delete("/{course_id}")
+@router.delete(
+    "/{course_id}"
+)
 def delete_course(
     course_id: int,
     db: Session = Depends(get_db),
@@ -460,10 +870,12 @@ def delete_course(
     # SAVE CLOUDINARY PUBLIC ID
     # --------------------------------------------------------
 
-    thumbnail_public_id = course.thumbnail_public_id
+    thumbnail_public_id = (
+        course.thumbnail_public_id
+    )
 
     # --------------------------------------------------------
-    # DELETE DATABASE RECORD
+    # DELETE COURSE
     # --------------------------------------------------------
 
     try:
@@ -487,9 +899,7 @@ def delete_course(
         )
 
     # --------------------------------------------------------
-    # DELETE CLOUDINARY IMAGE
-    #
-    # Only after database deletion succeeds.
+    # DELETE CLOUDINARY THUMBNAIL
     # --------------------------------------------------------
 
     if thumbnail_public_id:

@@ -8,7 +8,9 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
 )
+
 from sqlalchemy.orm import relationship
+
 from datetime import datetime
 
 from database import Base
@@ -32,7 +34,16 @@ class Course(Base):
         nullable=False
     )
 
+    # Short description
+    # Appears above the video.
     description = Column(
+        Text,
+        nullable=True
+    )
+
+    # Detailed description
+    # Appears below the video.
+    detailed_description = Column(
         Text,
         nullable=True
     )
@@ -49,9 +60,6 @@ class Course(Base):
 
     # =====================================================
     # COURSE COVER IMAGE
-    #
-    # thumbnail = Cloudinary image URL
-    # thumbnail_public_id = Cloudinary public ID
     # =====================================================
 
     thumbnail = Column(
@@ -110,6 +118,18 @@ class Course(Base):
         back_populates="courses"
     )
 
+    # =====================================================
+    # COURSE → SECTIONS → LESSONS
+    # =====================================================
+
+    sections = relationship(
+        "Section",
+        back_populates="course",
+        cascade="all, delete-orphan",
+        order_by="Section.section_number"
+    )
+
+    # Keep this for compatibility with existing code.
     lessons = relationship(
         "Lesson",
         back_populates="course",
