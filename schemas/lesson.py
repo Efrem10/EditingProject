@@ -1,6 +1,6 @@
 # schemas/lesson.py
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
 
@@ -17,23 +17,45 @@ class LessonCreate(BaseModel):
     is_free: bool = False
 
     # -----------------------------------------------------
-    # Section that this lesson belongs to
+    # Section this lesson belongs to
     # -----------------------------------------------------
 
     section_id: int
 
     # -----------------------------------------------------
     # Lesson order inside the section
-    #
-    # Example:
-    #
-    # Section 2: Installations
-    #     1. Install XAMPP
-    #     2. Install WordPress
-    #     3. Configure WordPress
     # -----------------------------------------------------
 
     lesson_number: int = 1
+
+
+# =========================================================
+# UPDATE LESSON
+#
+# Used when editing an existing lesson.
+#
+# PUT /lesson/lessons/{lesson_id}
+# =========================================================
+
+class LessonUpdate(BaseModel):
+
+    title: Optional[str] = None
+
+    duration: Optional[str] = None
+
+    is_free: Optional[bool] = None
+
+    # -----------------------------------------------------
+    # Allow moving lesson to another section
+    # -----------------------------------------------------
+
+    section_id: Optional[int] = None
+
+    # -----------------------------------------------------
+    # Allow changing lesson order
+    # -----------------------------------------------------
+
+    lesson_number: Optional[int] = None
 
 
 # =========================================================
@@ -62,5 +84,28 @@ class LessonResponse(BaseModel):
 
     lesson_number: int
 
-    class Config:
-        from_attributes = True
+    # -----------------------------------------------------
+    # Optional description
+    #
+    # Your backend already uses getattr(lesson, "description",
+    # None), so this allows the response to include it if
+    # your Lesson model has a description column.
+    # -----------------------------------------------------
+
+    description: Optional[str] = None
+
+    # -----------------------------------------------------
+    # Cloudinary information
+    #
+    # Useful for admin editing.
+    # -----------------------------------------------------
+
+    cloudinary_public_id: Optional[str] = None
+
+    # -----------------------------------------------------
+    # Pydantic v2
+    # -----------------------------------------------------
+
+    model_config = ConfigDict(
+        from_attributes=True
+    )

@@ -12,6 +12,7 @@ from database import get_db
 
 from models.section import Section
 from models.course import Course
+from models.lesson import Lesson
 
 from schemas.section import (
     SectionCreate,
@@ -23,6 +24,10 @@ from schemas.section import (
 from auth.dependencies import admin_required
 
 
+# ============================================================
+# ROUTER
+# ============================================================
+
 router = APIRouter(
     prefix="/section",
     tags=["Sections"],
@@ -33,8 +38,6 @@ router = APIRouter(
 # CREATE SECTION
 #
 # POST /section/course/{course_id}
-#
-# Creates a section inside a specific course.
 # ============================================================
 
 @router.post(
@@ -67,7 +70,7 @@ def create_section(
         )
 
     # --------------------------------------------------------
-    # CHECK SECTION NUMBER
+    # CHECK DUPLICATE SECTION NUMBER
     # --------------------------------------------------------
 
     existing_section = (
@@ -87,14 +90,18 @@ def create_section(
         )
 
     # --------------------------------------------------------
-    # CREATE SECTION
+    # CREATE
     # --------------------------------------------------------
 
     new_section = Section(
         course_id=course_id,
         section_number=section.section_number,
-        title=section.title,
-        description=section.description,
+        title=section.title.strip(),
+        description=(
+            section.description.strip()
+            if section.description
+            else None
+        ),
     )
 
     try:
@@ -113,7 +120,7 @@ def create_section(
 
         print(
             "CREATE SECTION ERROR:",
-            e,
+            repr(e),
         )
 
         raise HTTPException(
@@ -123,11 +130,9 @@ def create_section(
 
 
 # ============================================================
-# GET ALL SECTIONS FOR A COURSE
+# GET ALL SECTIONS FOR COURSE
 #
 # GET /section/course/{course_id}
-#
-# Returns sections in section-number order.
 # ============================================================
 
 @router.get(
@@ -162,8 +167,12 @@ def get_course_sections(
 
     sections = (
         db.query(Section)
-        .filter(Section.course_id == course_id)
-        .order_by(Section.section_number.asc())
+        .filter(
+            Section.course_id == course_id
+        )
+        .order_by(
+            Section.section_number.asc()
+        )
         .all()
     )
 
@@ -175,7 +184,7 @@ def get_course_sections(
 #
 # GET /section/{section_id}
 #
-# Includes lessons belonging to the section.
+# Includes lessons.
 # ============================================================
 
 @router.get(
@@ -189,7 +198,9 @@ def get_section(
 
     section = (
         db.query(Section)
-        .filter(Section.id == section_id)
+        .filter(
+            Section.id == section_id
+        )
         .first()
     )
 
@@ -207,6 +218,8 @@ def get_section(
 # UPDATE SECTION
 #
 # PUT /section/{section_id}
+#
+# Used by EditCourse.
 # ============================================================
 
 @router.put(
@@ -226,7 +239,9 @@ def update_section(
 
     section = (
         db.query(Section)
-        .filter(Section.id == section_id)
+        .filter(
+            Section.id == section_id
+        )
         .first()
     )
 
@@ -239,34 +254,73 @@ def update_section(
 
     # --------------------------------------------------------
     # CHECK SECTION NUMBER
-    #
-    # Prevent duplicate section numbers inside same course.
     # --------------------------------------------------------
 
-    existing_section = (
-        db.query(Section)
-        .filter(
-            Section.course_id == section.course_id,
-            Section.section_number == section_data.section_number,
-            Section.id != section_id,
-        )
-        .first()
-    )
+    if section_data.section_number is not None:
 
-    if existing_section:
+        existing_section = (
+            db.query(Section)
+            .filter(
+                Section.course_id == section.course_id,
 
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This section number already exists in this course.",
+                Section.section_number ==
+                section_data.section_number,
+
+                Section.id != section_id,
+            )
+            .first()
         )
 
+        if existing_section:
+
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "This section number already exists "
+                    "in this course."
+                ),
+            )
+
+        section.section_number = (
+            section_data.section_number
+        )
+
     # --------------------------------------------------------
-    # UPDATE
+    # UPDATE TITLE
     # --------------------------------------------------------
 
-    section.section_number = section_data.section_number
-    section.title = section_data.title
-    section.description = section_data.description
+    if section_data.title is not None:
+
+        title = section_data.title.strip()
+
+        if not title:
+
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Section title cannot be empty.",
+            )
+
+        section.title = title
+
+    # --------------------------------------------------------
+    # UPDATE DESCRIPTION
+    # --------------------------------------------------------
+
+    if section_data.description is not None:
+
+        description = (
+            section_data.description.strip()
+        )
+
+        section.description = (
+            description
+            if description
+            else None
+        )
+
+    # --------------------------------------------------------
+    # SAVE
+    # --------------------------------------------------------
 
     try:
 
@@ -282,7 +336,7 @@ def update_section(
 
         print(
             "UPDATE SECTION ERROR:",
-            e,
+            repr(e),
         )
 
         raise HTTPException(
@@ -296,11 +350,12 @@ def update_section(
 #
 # DELETE /section/{section_id}
 #
-# Because Section -> Lesson uses cascade delete,
-# deleting a section also deletes its lessons.
+# Deletes the section and its lessons.
 # ============================================================
 
-@router.delete("/{section_id}")
+@router.delete(
+    "/{section_id}"
+)
 def delete_section(
     section_id: int,
     db: Session = Depends(get_db),
@@ -313,7 +368,9 @@ def delete_section(
 
     section = (
         db.query(Section)
-        .filter(Section.id == section_id)
+        .filter(
+            Section.id == section_id
+        )
         .first()
     )
 
@@ -326,6 +383,29 @@ def delete_section(
 
     try:
 
+        # ----------------------------------------------------
+        # DELETE LESSONS FIRST
+        #
+        # This makes deletion reliable even if the database
+        # does not have ON DELETE CASCADE configured.
+        # ----------------------------------------------------
+
+        lessons = (
+            db.query(Lesson)
+            .filter(
+                Lesson.section_id == section_id
+            )
+            .all()
+        )
+
+        for lesson in lessons:
+
+            db.delete(lesson)
+
+        # ----------------------------------------------------
+        # DELETE SECTION
+        # ----------------------------------------------------
+
         db.delete(section)
 
         db.commit()
@@ -336,7 +416,7 @@ def delete_section(
 
         print(
             "DELETE SECTION ERROR:",
-            e,
+            repr(e),
         )
 
         raise HTTPException(
