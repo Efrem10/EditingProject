@@ -1,11 +1,14 @@
 # schemas/lesson.py
 
-from pydantic import BaseModel, ConfigDict
 from typing import Optional
+
+from pydantic import BaseModel, ConfigDict
 
 
 # =========================================================
 # CREATE LESSON
+#
+# POST /lesson/section/{section_id}
 # =========================================================
 
 class LessonCreate(BaseModel):
@@ -28,20 +31,46 @@ class LessonCreate(BaseModel):
 
     lesson_number: int = 1
 
+    # -----------------------------------------------------
+    # Optional lesson description
+    # -----------------------------------------------------
+
+    description: Optional[str] = None
+
 
 # =========================================================
 # UPDATE LESSON
 #
-# Used when editing an existing lesson.
-#
 # PUT /lesson/lessons/{lesson_id}
+#
+# All fields are optional so the admin can update only
+# the fields that need to be changed.
 # =========================================================
 
 class LessonUpdate(BaseModel):
 
+    # -----------------------------------------------------
+    # Lesson title
+    # -----------------------------------------------------
+
     title: Optional[str] = None
 
+    # -----------------------------------------------------
+    # Lesson description
+    # -----------------------------------------------------
+
+    description: Optional[str] = None
+
+    # -----------------------------------------------------
+    # Lesson duration
+    # Example: "10:30"
+    # -----------------------------------------------------
+
     duration: Optional[str] = None
+
+    # -----------------------------------------------------
+    # Free lesson or paid lesson
+    # -----------------------------------------------------
 
     is_free: Optional[bool] = None
 
@@ -52,7 +81,7 @@ class LessonUpdate(BaseModel):
     section_id: Optional[int] = None
 
     # -----------------------------------------------------
-    # Allow changing lesson order
+    # Lesson order inside section
     # -----------------------------------------------------
 
     lesson_number: Optional[int] = None
@@ -60,6 +89,8 @@ class LessonUpdate(BaseModel):
 
 # =========================================================
 # LESSON RESPONSE
+#
+# Used when returning a lesson from the API.
 # =========================================================
 
 class LessonResponse(BaseModel):
@@ -68,11 +99,33 @@ class LessonResponse(BaseModel):
 
     title: str
 
+    # -----------------------------------------------------
+    # Optional lesson description
+    # -----------------------------------------------------
+
+    description: Optional[str] = None
+
+    # -----------------------------------------------------
+    # Lesson duration
+    # -----------------------------------------------------
+
     duration: Optional[str] = None
+
+    # -----------------------------------------------------
+    # Cloudinary video URL
+    # -----------------------------------------------------
 
     video_url: Optional[str] = None
 
+    # -----------------------------------------------------
+    # Free lesson
+    # -----------------------------------------------------
+
     is_free: bool
+
+    # -----------------------------------------------------
+    # Course information
+    # -----------------------------------------------------
 
     course_id: int
 
@@ -82,28 +135,24 @@ class LessonResponse(BaseModel):
 
     section_id: int
 
+    # -----------------------------------------------------
+    # Lesson order
+    # -----------------------------------------------------
+
     lesson_number: int
 
     # -----------------------------------------------------
-    # Optional description
+    # Cloudinary public ID
     #
-    # Your backend already uses getattr(lesson, "description",
-    # None), so this allows the response to include it if
-    # your Lesson model has a description column.
-    # -----------------------------------------------------
-
-    description: Optional[str] = None
-
-    # -----------------------------------------------------
-    # Cloudinary information
-    #
-    # Useful for admin editing.
+    # Useful for admin operations such as replacing
+    # or deleting the video.
     # -----------------------------------------------------
 
     cloudinary_public_id: Optional[str] = None
 
     # -----------------------------------------------------
     # Pydantic v2
+    # Allows SQLAlchemy model objects to be returned.
     # -----------------------------------------------------
 
     model_config = ConfigDict(

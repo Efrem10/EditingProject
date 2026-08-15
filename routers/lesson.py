@@ -25,6 +25,7 @@ from models.purchase import Purchase
 
 from schemas.lesson import (
     LessonCreate,
+    LessonUpdate,
     LessonResponse,
 )
 
@@ -47,13 +48,8 @@ oauth2_scheme = OAuth2PasswordBearer(
 
 
 def get_optional_user(
-    token: str | None = Depends(oauth2_scheme)
+    token: str | None = Depends(oauth2_scheme),
 ):
-    """
-    Return logged-in user when a valid token exists.
-    Return None when no valid token exists.
-    """
-
     if not token:
         return None
 
@@ -126,7 +122,6 @@ def create_section(
     )
 
     if not course:
-
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Course not found.",
@@ -142,7 +137,6 @@ def create_section(
     )
 
     if existing_section:
-
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This section number already exists for this course.",
@@ -158,9 +152,7 @@ def create_section(
     try:
 
         db.add(new_section)
-
         db.commit()
-
         db.refresh(new_section)
 
         return new_section
@@ -169,10 +161,7 @@ def create_section(
 
         db.rollback()
 
-        print(
-            "CREATE SECTION ERROR:",
-            e,
-        )
+        print("CREATE SECTION ERROR:", e)
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -201,24 +190,21 @@ def get_course_sections(
     )
 
     if not course:
-
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Course not found.",
         )
 
-    sections = (
+    return (
         db.query(Section)
         .filter(
             Section.course_id == course_id
         )
         .order_by(
-            Section.section_number
+            Section.section_number.asc()
         )
         .all()
     )
-
-    return sections
 
 
 # =========================================================
@@ -248,15 +234,10 @@ def create_lesson(
     )
 
     if not section:
-
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Section not found.",
         )
-
-    # -----------------------------------------------------
-    # DETERMINE LESSON NUMBER
-    # -----------------------------------------------------
 
     lesson_number = lesson.lesson_number
 
@@ -279,10 +260,6 @@ def create_lesson(
             else 1
         )
 
-    # -----------------------------------------------------
-    # CHECK DUPLICATE NUMBER
-    # -----------------------------------------------------
-
     existing_lesson = (
         db.query(Lesson)
         .filter(
@@ -293,15 +270,10 @@ def create_lesson(
     )
 
     if existing_lesson:
-
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This lesson number already exists in this section.",
         )
-
-    # -----------------------------------------------------
-    # CREATE
-    # -----------------------------------------------------
 
     new_lesson = Lesson(
         title=lesson.title,
@@ -320,9 +292,7 @@ def create_lesson(
     try:
 
         db.add(new_lesson)
-
         db.commit()
-
         db.refresh(new_lesson)
 
         return new_lesson
@@ -331,10 +301,7 @@ def create_lesson(
 
         db.rollback()
 
-        print(
-            "CREATE LESSON ERROR:",
-            e,
-        )
+        print("CREATE LESSON ERROR:", e)
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -343,7 +310,7 @@ def create_lesson(
 
 
 # =========================================================
-# GET LESSONS FOR ONE SECTION
+# GET LESSONS FOR SECTION
 #
 # GET /lesson/section/{section_id}/lessons
 # =========================================================
@@ -366,7 +333,6 @@ def get_section_lessons(
     )
 
     if not section:
-
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Section not found.",
@@ -378,7 +344,7 @@ def get_section_lessons(
             Lesson.section_id == section_id
         )
         .order_by(
-            Lesson.lesson_number
+            Lesson.lesson_number.asc()
         )
         .all()
     )
@@ -405,19 +371,15 @@ def get_section_lessons(
             current_user
             and current_user.get("role") == "admin"
         ):
-
             locked = False
 
         elif lesson.is_free:
-
             locked = False
 
         elif purchase:
-
             locked = False
 
         else:
-
             locked = True
 
         result.append({
@@ -456,7 +418,6 @@ def get_section_lessons(
                 and current_user.get("role") == "admin"
                 else None
             ),
-
         })
 
     return result
@@ -466,10 +427,6 @@ def get_section_lessons(
 # GET COMPLETE COURSE STRUCTURE
 #
 # GET /lesson/course/{course_id}
-#
-# COURSE
-#     SECTION
-#         LESSON
 # =========================================================
 
 @router.get(
@@ -490,7 +447,6 @@ def get_course_lessons(
     )
 
     if not course:
-
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Course not found.",
@@ -516,7 +472,7 @@ def get_course_lessons(
             Section.course_id == course_id
         )
         .order_by(
-            Section.section_number
+            Section.section_number.asc()
         )
         .all()
     )
@@ -533,7 +489,7 @@ def get_course_lessons(
                 Lesson.section_id == section.id
             )
             .order_by(
-                Lesson.lesson_number
+                Lesson.lesson_number.asc()
             )
             .all()
         )
@@ -544,19 +500,15 @@ def get_course_lessons(
                 current_user
                 and current_user.get("role") == "admin"
             ):
-
                 locked = False
 
             elif lesson.is_free:
-
                 locked = False
 
             elif purchase:
-
                 locked = False
 
             else:
-
                 locked = True
 
             lessons_result.append({
@@ -595,7 +547,6 @@ def get_course_lessons(
                     and current_user.get("role") == "admin"
                     else None
                 ),
-
             })
 
         result.append({
@@ -616,17 +567,11 @@ def get_course_lessons(
 
             "lessons":
                 lessons_result,
-
         })
 
     return {
-
-        "course_id":
-            course.id,
-
-        "sections":
-            result,
-
+        "course_id": course.id,
+        "sections": result,
     }
 
 
@@ -635,15 +580,17 @@ def get_course_lessons(
 #
 # PUT /lesson/lessons/{lesson_id}
 #
-# THIS WAS MISSING FROM YOUR BACKEND
+# IMPORTANT:
+# Uses LessonUpdate, NOT LessonCreate.
 # =========================================================
 
 @router.put(
-    "/lessons/{lesson_id}"
+    "/lessons/{lesson_id}",
+    response_model=LessonResponse,
 )
 def update_lesson(
     lesson_id: int,
-    lesson_data: LessonCreate,
+    lesson_data: LessonUpdate,
     db: Session = Depends(get_db),
     current_user=Depends(admin_required),
 ):
@@ -668,7 +615,7 @@ def update_lesson(
         )
 
     # -----------------------------------------------------
-    # CHECK SECTION
+    # FIND SECTION
     # -----------------------------------------------------
 
     section = (
@@ -687,25 +634,71 @@ def update_lesson(
         )
 
     # -----------------------------------------------------
-    # LESSON NUMBER
+    # USE EXISTING VALUES WHEN FIELD IS NOT SENT
     # -----------------------------------------------------
 
-    lesson_number = lesson_data.lesson_number
+    new_title = (
+        lesson_data.title
+        if lesson_data.title is not None
+        else lesson.title
+    )
 
-    if not lesson_number or lesson_number < 1:
+    new_duration = (
+        lesson_data.duration
+        if lesson_data.duration is not None
+        else lesson.duration
+    )
 
-        lesson_number = lesson.lesson_number
+    new_is_free = (
+        lesson_data.is_free
+        if lesson_data.is_free is not None
+        else lesson.is_free
+    )
+
+    new_lesson_number = (
+        lesson_data.lesson_number
+        if lesson_data.lesson_number is not None
+        else lesson.lesson_number
+    )
+
+    new_description = (
+        lesson_data.description
+        if lesson_data.description is not None
+        else getattr(
+            lesson,
+            "description",
+            None,
+        )
+    )
 
     # -----------------------------------------------------
-    # CHECK DUPLICATE LESSON NUMBER
+    # VALIDATE
+    # -----------------------------------------------------
+
+    if not new_title or not new_title.strip():
+
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Lesson title cannot be empty.",
+        )
+
+    if new_lesson_number < 1:
+
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Lesson number must be at least 1.",
+        )
+
+    # -----------------------------------------------------
+    # DUPLICATE LESSON NUMBER
     # -----------------------------------------------------
 
     existing_lesson = (
         db.query(Lesson)
         .filter(
             Lesson.section_id == lesson.section_id,
-            Lesson.lesson_number == lesson_number,
-            Lesson.id != lesson_id,
+            Lesson.lesson_number == new_lesson_number,
+            Lesson.id != lesson.id,
         )
         .first()
     )
@@ -721,22 +714,24 @@ def update_lesson(
         )
 
     # -----------------------------------------------------
-    # UPDATE LESSON
+    # UPDATE DATABASE
     # -----------------------------------------------------
 
-    lesson.title = lesson_data.title
+    lesson.title = new_title.strip()
 
-    lesson.description = getattr(
-        lesson_data,
-        "description",
-        None,
+    lesson.duration = (
+        new_duration.strip()
+        if isinstance(new_duration, str)
+        else new_duration
     )
 
-    lesson.duration = lesson_data.duration
+    lesson.is_free = new_is_free
 
-    lesson.is_free = lesson_data.is_free
+    lesson.lesson_number = new_lesson_number
 
-    lesson.lesson_number = lesson_number
+    # Only use this if your Lesson model has description.
+    if hasattr(lesson, "description"):
+        lesson.description = new_description
 
     try:
 
@@ -744,50 +739,7 @@ def update_lesson(
 
         db.refresh(lesson)
 
-        return {
-
-            "message":
-                "Lesson updated successfully.",
-
-            "lesson": {
-
-                "id":
-                    lesson.id,
-
-                "title":
-                    lesson.title,
-
-                "description":
-                    getattr(
-                        lesson,
-                        "description",
-                        None,
-                    ),
-
-                "duration":
-                    lesson.duration,
-
-                "is_free":
-                    lesson.is_free,
-
-                "lesson_number":
-                    lesson.lesson_number,
-
-                "course_id":
-                    lesson.course_id,
-
-                "section_id":
-                    lesson.section_id,
-
-                "video_url":
-                    lesson.video_url,
-
-                "cloudinary_public_id":
-                    lesson.cloudinary_public_id,
-
-            },
-
-        }
+        return lesson
 
     except SQLAlchemyError as e:
 
@@ -828,14 +780,12 @@ def watch_lesson(
     )
 
     if not lesson:
-
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Lesson not found.",
         )
 
     if not lesson.video_url:
-
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Video is not available for this lesson.",
@@ -847,53 +797,35 @@ def watch_lesson(
     ):
 
         return {
-
             "id": lesson.id,
-
             "title": lesson.title,
-
             "description": getattr(
                 lesson,
                 "description",
                 None,
             ),
-
             "video_url": lesson.video_url,
-
             "is_free": lesson.is_free,
-
             "locked": False,
-
             "section_id": lesson.section_id,
-
             "lesson_number": lesson.lesson_number,
-
         }
 
     if lesson.is_free:
 
         return {
-
             "id": lesson.id,
-
             "title": lesson.title,
-
             "description": getattr(
                 lesson,
                 "description",
                 None,
             ),
-
             "video_url": lesson.video_url,
-
             "is_free": True,
-
             "locked": False,
-
             "section_id": lesson.section_id,
-
             "lesson_number": lesson.lesson_number,
-
         }
 
     if not current_user:
@@ -921,35 +853,18 @@ def watch_lesson(
         )
 
     return {
-
-        "id":
-            lesson.id,
-
-        "title":
-            lesson.title,
-
-        "description":
-            getattr(
-                lesson,
-                "description",
-                None,
-            ),
-
-        "video_url":
-            lesson.video_url,
-
-        "is_free":
-            False,
-
-        "locked":
-            False,
-
-        "section_id":
-            lesson.section_id,
-
-        "lesson_number":
-            lesson.lesson_number,
-
+        "id": lesson.id,
+        "title": lesson.title,
+        "description": getattr(
+            lesson,
+            "description",
+            None,
+        ),
+        "video_url": lesson.video_url,
+        "is_free": False,
+        "locked": False,
+        "section_id": lesson.section_id,
+        "lesson_number": lesson.lesson_number,
     }
 
 
@@ -978,14 +893,12 @@ async def upload_lesson_video(
     )
 
     if not lesson:
-
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Lesson not found.",
         )
 
     if not file.filename:
-
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No video file selected.",
@@ -995,7 +908,6 @@ async def upload_lesson_video(
         file.content_type
         and not file.content_type.startswith("video/")
     ):
-
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Please upload a valid video file.",
@@ -1078,10 +990,6 @@ async def upload_lesson_video(
                 detail="Cloudinary upload succeeded but no video URL was returned.",
             )
 
-        # -------------------------------------------------
-        # SAVE
-        # -------------------------------------------------
-
         lesson.video_url = video_url
 
         lesson.cloudinary_public_id = public_id
@@ -1091,25 +999,19 @@ async def upload_lesson_video(
         db.refresh(lesson)
 
         return {
-
             "message":
                 "Video uploaded successfully.",
-
             "lesson_id":
                 lesson.id,
-
             "video_url":
                 lesson.video_url,
-
             "public_id":
                 lesson.cloudinary_public_id,
-
         }
 
     except HTTPException:
 
         db.rollback()
-
         raise
 
     except Exception as e:
@@ -1131,16 +1033,12 @@ async def upload_lesson_video(
         if os.path.exists(temp_path):
 
             try:
-
                 os.remove(temp_path)
-
             except Exception:
                 pass
 
         try:
-
             await file.close()
-
         except Exception:
             pass
 
@@ -1169,7 +1067,6 @@ def delete_lesson(
     )
 
     if not lesson:
-
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Lesson not found.",
@@ -1219,11 +1116,8 @@ def delete_lesson(
         )
 
     return {
-
         "message":
             "Lesson deleted successfully.",
-
         "lesson_id":
             lesson_id,
-
     }
