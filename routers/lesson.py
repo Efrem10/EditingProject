@@ -29,14 +29,9 @@ from schemas.lesson import (
     LessonResponse,
 )
 
-from auth.dependencies import (
-    admin_required,
-)
+from auth.dependencies import admin_required
 
-from config import (
-    SECRET_KEY,
-    ALGORITHM,
-)
+from config import SECRET_KEY, ALGORITHM
 
 from utils.cloudinary_upload import (
     upload_video_to_cloudinary,
@@ -159,9 +154,7 @@ def create_section(
     try:
 
         db.add(new_section)
-
         db.commit()
-
         db.refresh(new_section)
 
         return new_section
@@ -170,10 +163,7 @@ def create_section(
 
         db.rollback()
 
-        print(
-            "CREATE SECTION ERROR:",
-            e,
-        )
+        print("CREATE SECTION ERROR:", e)
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -253,6 +243,10 @@ def create_lesson(
             detail="Section not found.",
         )
 
+    # -----------------------------------------------------
+    # LESSON NUMBER
+    # -----------------------------------------------------
+
     lesson_number = lesson.lesson_number
 
     if not lesson_number or lesson_number < 1:
@@ -274,6 +268,10 @@ def create_lesson(
             else 1
         )
 
+    # -----------------------------------------------------
+    # CHECK DUPLICATE LESSON NUMBER
+    # -----------------------------------------------------
+
     existing_lesson = (
         db.query(Lesson)
         .filter(
@@ -290,13 +288,15 @@ def create_lesson(
             detail="This lesson number already exists in this section.",
         )
 
+    # -----------------------------------------------------
+    # CREATE LESSON
+    #
+    # IMPORTANT:
+    # Lesson model does NOT have description.
+    # -----------------------------------------------------
+
     new_lesson = Lesson(
         title=lesson.title,
-        description=getattr(
-            lesson,
-            "description",
-            None,
-        ),
         duration=lesson.duration,
         is_free=lesson.is_free,
         lesson_number=lesson_number,
@@ -307,9 +307,7 @@ def create_lesson(
     try:
 
         db.add(new_lesson)
-
         db.commit()
-
         db.refresh(new_lesson)
 
         return new_lesson
@@ -318,10 +316,7 @@ def create_lesson(
 
         db.rollback()
 
-        print(
-            "CREATE LESSON ERROR:",
-            e,
-        )
+        print("CREATE LESSON ERROR:", e)
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -412,12 +407,6 @@ def get_section_lessons(
             "id": lesson.id,
 
             "title": lesson.title,
-
-            "description": getattr(
-                lesson,
-                "description",
-                None,
-            ),
 
             "duration": lesson.duration,
 
@@ -549,12 +538,6 @@ def get_course_lessons(
 
                 "title": lesson.title,
 
-                "description": getattr(
-                    lesson,
-                    "description",
-                    None,
-                ),
-
                 "duration": lesson.duration,
 
                 "video_url": (
@@ -587,15 +570,20 @@ def get_course_lessons(
 
             "id": section.id,
 
-            "section_number": section.section_number,
+            "section_number":
+                section.section_number,
 
-            "title": section.title,
+            "title":
+                section.title,
 
-            "description": section.description,
+            "description":
+                section.description,
 
-            "course_id": section.course_id,
+            "course_id":
+                section.course_id,
 
-            "lessons": lessons_result,
+            "lessons":
+                lessons_result,
         })
 
     return {
@@ -608,6 +596,13 @@ def get_course_lessons(
 # UPDATE LESSON
 #
 # PUT /lesson/lessons/{lesson_id}
+#
+# Updates:
+# - title
+# - duration
+# - is_free
+# - lesson_number
+#
 # =========================================================
 
 @router.put(
@@ -620,6 +615,10 @@ def update_lesson(
     db: Session = Depends(get_db),
     current_user: dict = Depends(admin_required),
 ):
+
+    # -----------------------------------------------------
+    # FIND LESSON
+    # -----------------------------------------------------
 
     lesson = (
         db.query(Lesson)
@@ -636,6 +635,10 @@ def update_lesson(
             detail="Lesson not found.",
         )
 
+    # -----------------------------------------------------
+    # FIND SECTION
+    # -----------------------------------------------------
+
     section = (
         db.query(Section)
         .filter(
@@ -650,6 +653,10 @@ def update_lesson(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Lesson section not found.",
         )
+
+    # -----------------------------------------------------
+    # KEEP OLD VALUES IF NOT PROVIDED
+    # -----------------------------------------------------
 
     new_title = (
         lesson_data.title
@@ -675,15 +682,9 @@ def update_lesson(
         else lesson.lesson_number
     )
 
-    new_description = (
-        lesson_data.description
-        if lesson_data.description is not None
-        else getattr(
-            lesson,
-            "description",
-            None,
-        )
-    )
+    # -----------------------------------------------------
+    # VALIDATION
+    # -----------------------------------------------------
 
     if not new_title or not new_title.strip():
 
@@ -699,6 +700,10 @@ def update_lesson(
             detail="Lesson number must be at least 1.",
         )
 
+    # -----------------------------------------------------
+    # CHECK DUPLICATE LESSON NUMBER
+    # -----------------------------------------------------
+
     existing_lesson = (
         db.query(Lesson)
         .filter(
@@ -713,8 +718,15 @@ def update_lesson(
 
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This lesson number already exists in this section.",
+            detail=(
+                "This lesson number already exists "
+                "in this section."
+            ),
         )
+
+    # -----------------------------------------------------
+    # UPDATE
+    # -----------------------------------------------------
 
     lesson.title = new_title.strip()
 
@@ -728,9 +740,9 @@ def update_lesson(
 
     lesson.lesson_number = new_lesson_number
 
-    if hasattr(lesson, "description"):
-
-        lesson.description = new_description
+    # -----------------------------------------------------
+    # SAVE
+    # -----------------------------------------------------
 
     try:
 
@@ -792,6 +804,10 @@ def watch_lesson(
             detail="Video is not available for this lesson.",
         )
 
+    # -----------------------------------------------------
+    # ADMIN
+    # -----------------------------------------------------
+
     if (
         current_user
         and current_user.get("role") == "admin"
@@ -800,11 +816,6 @@ def watch_lesson(
         return {
             "id": lesson.id,
             "title": lesson.title,
-            "description": getattr(
-                lesson,
-                "description",
-                None,
-            ),
             "video_url": lesson.video_url,
             "is_free": lesson.is_free,
             "locked": False,
@@ -812,16 +823,15 @@ def watch_lesson(
             "lesson_number": lesson.lesson_number,
         }
 
+    # -----------------------------------------------------
+    # FREE LESSON
+    # -----------------------------------------------------
+
     if lesson.is_free:
 
         return {
             "id": lesson.id,
             "title": lesson.title,
-            "description": getattr(
-                lesson,
-                "description",
-                None,
-            ),
             "video_url": lesson.video_url,
             "is_free": True,
             "locked": False,
@@ -829,12 +839,20 @@ def watch_lesson(
             "lesson_number": lesson.lesson_number,
         }
 
+    # -----------------------------------------------------
+    # LOGIN REQUIRED
+    # -----------------------------------------------------
+
     if not current_user:
 
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Please login to watch this lesson.",
         )
+
+    # -----------------------------------------------------
+    # CHECK PURCHASE
+    # -----------------------------------------------------
 
     purchase = (
         db.query(Purchase)
@@ -856,11 +874,6 @@ def watch_lesson(
     return {
         "id": lesson.id,
         "title": lesson.title,
-        "description": getattr(
-            lesson,
-            "description",
-            None,
-        ),
         "video_url": lesson.video_url,
         "is_free": False,
         "locked": False,
@@ -917,6 +930,10 @@ async def upload_lesson_video(
             detail="Please upload a valid video file.",
         )
 
+    # -----------------------------------------------------
+    # TEMP DIRECTORY
+    # -----------------------------------------------------
+
     temp_dir = "temp_uploads"
 
     os.makedirs(
@@ -935,6 +952,10 @@ async def upload_lesson_video(
 
     try:
 
+        # -------------------------------------------------
+        # SAVE TEMPORARY FILE
+        # -------------------------------------------------
+
         with open(
             temp_path,
             "wb",
@@ -944,6 +965,10 @@ async def upload_lesson_video(
                 file.file,
                 buffer,
             )
+
+        # -------------------------------------------------
+        # DELETE OLD VIDEO
+        # -------------------------------------------------
 
         if lesson.cloudinary_public_id:
 
@@ -959,6 +984,10 @@ async def upload_lesson_video(
                     "OLD CLOUDINARY VIDEO DELETE ERROR:",
                     e,
                 )
+
+        # -------------------------------------------------
+        # UPLOAD NEW VIDEO
+        # -------------------------------------------------
 
         result = upload_video_to_cloudinary(
             temp_path
@@ -983,8 +1012,15 @@ async def upload_lesson_video(
 
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Cloudinary upload succeeded but no video URL was returned.",
+                detail=(
+                    "Cloudinary upload succeeded "
+                    "but no video URL was returned."
+                ),
             )
+
+        # -------------------------------------------------
+        # SAVE VIDEO INFORMATION
+        # -------------------------------------------------
 
         lesson.video_url = video_url
 
@@ -995,10 +1031,17 @@ async def upload_lesson_video(
         db.refresh(lesson)
 
         return {
-            "message": "Video uploaded successfully.",
-            "lesson_id": lesson.id,
-            "video_url": lesson.video_url,
-            "public_id": lesson.cloudinary_public_id,
+            "message":
+                "Video uploaded successfully.",
+
+            "lesson_id":
+                lesson.id,
+
+            "video_url":
+                lesson.video_url,
+
+            "public_id":
+                lesson.cloudinary_public_id,
         }
 
     except HTTPException:
@@ -1023,6 +1066,10 @@ async def upload_lesson_video(
 
     finally:
 
+        # -------------------------------------------------
+        # DELETE TEMP FILE
+        # -------------------------------------------------
+
         if os.path.exists(temp_path):
 
             try:
@@ -1030,6 +1077,7 @@ async def upload_lesson_video(
                 os.remove(temp_path)
 
             except Exception:
+
                 pass
 
         try:
@@ -1071,6 +1119,10 @@ def delete_lesson(
             detail="Lesson not found.",
         )
 
+    # -----------------------------------------------------
+    # DELETE CLOUDINARY VIDEO
+    # -----------------------------------------------------
+
     if lesson.cloudinary_public_id:
 
         try:
@@ -1085,6 +1137,10 @@ def delete_lesson(
                 "CLOUDINARY VIDEO DELETE ERROR:",
                 e,
             )
+
+    # -----------------------------------------------------
+    # DELETE LESSON
+    # -----------------------------------------------------
 
     try:
 
@@ -1107,6 +1163,9 @@ def delete_lesson(
         )
 
     return {
-        "message": "Lesson deleted successfully.",
-        "lesson_id": lesson_id,
+        "message":
+            "Lesson deleted successfully.",
+
+        "lesson_id":
+            lesson_id,
     }
