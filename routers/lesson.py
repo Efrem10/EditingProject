@@ -1,3 +1,6 @@
+import os
+import shutil
+
 from fastapi import (
     APIRouter,
     Depends,
@@ -7,14 +10,11 @@ from fastapi import (
     File,
 )
 
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
-
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 
-import os
-import shutil
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from database import get_db
 
@@ -29,7 +29,14 @@ from schemas.lesson import (
     LessonResponse,
 )
 
-from auth.dependencies import admin_required
+from auth.dependencies import (
+    admin_required,
+)
+
+from config import (
+    SECRET_KEY,
+    ALGORITHM,
+)
 
 from utils.cloudinary_upload import (
     upload_video_to_cloudinary,
@@ -50,15 +57,11 @@ oauth2_scheme = OAuth2PasswordBearer(
 def get_optional_user(
     token: str | None = Depends(oauth2_scheme),
 ):
+
     if not token:
         return None
 
     try:
-
-        from auth.dependencies import (
-            SECRET_KEY,
-            ALGORITHM,
-        )
 
         payload = jwt.decode(
             token,
@@ -70,7 +73,7 @@ def get_optional_user(
         email = payload.get("sub")
         role = payload.get("role")
 
-        if not user_id or not email:
+        if user_id is None or email is None:
             return None
 
         return {
@@ -80,9 +83,11 @@ def get_optional_user(
         }
 
     except JWTError:
+
         return None
 
     except Exception:
+
         return None
 
 
@@ -112,7 +117,7 @@ def create_section(
     title: str,
     description: str | None = None,
     db: Session = Depends(get_db),
-    current_user=Depends(admin_required),
+    current_user: dict = Depends(admin_required),
 ):
 
     course = (
@@ -122,6 +127,7 @@ def create_section(
     )
 
     if not course:
+
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Course not found.",
@@ -137,6 +143,7 @@ def create_section(
     )
 
     if existing_section:
+
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This section number already exists for this course.",
@@ -152,7 +159,9 @@ def create_section(
     try:
 
         db.add(new_section)
+
         db.commit()
+
         db.refresh(new_section)
 
         return new_section
@@ -161,7 +170,10 @@ def create_section(
 
         db.rollback()
 
-        print("CREATE SECTION ERROR:", e)
+        print(
+            "CREATE SECTION ERROR:",
+            e,
+        )
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -190,6 +202,7 @@ def get_course_sections(
     )
 
     if not course:
+
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Course not found.",
@@ -222,7 +235,7 @@ def create_lesson(
     section_id: int,
     lesson: LessonCreate,
     db: Session = Depends(get_db),
-    current_user=Depends(admin_required),
+    current_user: dict = Depends(admin_required),
 ):
 
     section = (
@@ -234,6 +247,7 @@ def create_lesson(
     )
 
     if not section:
+
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Section not found.",
@@ -270,6 +284,7 @@ def create_lesson(
     )
 
     if existing_lesson:
+
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This lesson number already exists in this section.",
@@ -292,7 +307,9 @@ def create_lesson(
     try:
 
         db.add(new_lesson)
+
         db.commit()
+
         db.refresh(new_lesson)
 
         return new_lesson
@@ -301,7 +318,10 @@ def create_lesson(
 
         db.rollback()
 
-        print("CREATE LESSON ERROR:", e)
+        print(
+            "CREATE LESSON ERROR:",
+            e,
+        )
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -333,6 +353,7 @@ def get_section_lessons(
     )
 
     if not section:
+
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Section not found.",
@@ -371,15 +392,19 @@ def get_section_lessons(
             current_user
             and current_user.get("role") == "admin"
         ):
+
             locked = False
 
         elif lesson.is_free:
+
             locked = False
 
         elif purchase:
+
             locked = False
 
         else:
+
             locked = True
 
         result.append({
@@ -414,8 +439,10 @@ def get_section_lessons(
 
             "cloudinary_public_id": (
                 lesson.cloudinary_public_id
-                if current_user
-                and current_user.get("role") == "admin"
+                if (
+                    current_user
+                    and current_user.get("role") == "admin"
+                )
                 else None
             ),
         })
@@ -447,6 +474,7 @@ def get_course_lessons(
     )
 
     if not course:
+
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Course not found.",
@@ -500,15 +528,19 @@ def get_course_lessons(
                 current_user
                 and current_user.get("role") == "admin"
             ):
+
                 locked = False
 
             elif lesson.is_free:
+
                 locked = False
 
             elif purchase:
+
                 locked = False
 
             else:
+
                 locked = True
 
             lessons_result.append({
@@ -543,8 +575,10 @@ def get_course_lessons(
 
                 "cloudinary_public_id": (
                     lesson.cloudinary_public_id
-                    if current_user
-                    and current_user.get("role") == "admin"
+                    if (
+                        current_user
+                        and current_user.get("role") == "admin"
+                    )
                     else None
                 ),
             })
@@ -553,20 +587,15 @@ def get_course_lessons(
 
             "id": section.id,
 
-            "section_number":
-                section.section_number,
+            "section_number": section.section_number,
 
-            "title":
-                section.title,
+            "title": section.title,
 
-            "description":
-                section.description,
+            "description": section.description,
 
-            "course_id":
-                section.course_id,
+            "course_id": section.course_id,
 
-            "lessons":
-                lessons_result,
+            "lessons": lessons_result,
         })
 
     return {
@@ -579,9 +608,6 @@ def get_course_lessons(
 # UPDATE LESSON
 #
 # PUT /lesson/lessons/{lesson_id}
-#
-# IMPORTANT:
-# Uses LessonUpdate, NOT LessonCreate.
 # =========================================================
 
 @router.put(
@@ -592,12 +618,8 @@ def update_lesson(
     lesson_id: int,
     lesson_data: LessonUpdate,
     db: Session = Depends(get_db),
-    current_user=Depends(admin_required),
+    current_user: dict = Depends(admin_required),
 ):
-
-    # -----------------------------------------------------
-    # FIND LESSON
-    # -----------------------------------------------------
 
     lesson = (
         db.query(Lesson)
@@ -614,10 +636,6 @@ def update_lesson(
             detail="Lesson not found.",
         )
 
-    # -----------------------------------------------------
-    # FIND SECTION
-    # -----------------------------------------------------
-
     section = (
         db.query(Section)
         .filter(
@@ -632,10 +650,6 @@ def update_lesson(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Lesson section not found.",
         )
-
-    # -----------------------------------------------------
-    # USE EXISTING VALUES WHEN FIELD IS NOT SENT
-    # -----------------------------------------------------
 
     new_title = (
         lesson_data.title
@@ -671,10 +685,6 @@ def update_lesson(
         )
     )
 
-    # -----------------------------------------------------
-    # VALIDATE
-    # -----------------------------------------------------
-
     if not new_title or not new_title.strip():
 
         raise HTTPException(
@@ -688,10 +698,6 @@ def update_lesson(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Lesson number must be at least 1.",
         )
-
-    # -----------------------------------------------------
-    # DUPLICATE LESSON NUMBER
-    # -----------------------------------------------------
 
     existing_lesson = (
         db.query(Lesson)
@@ -707,15 +713,8 @@ def update_lesson(
 
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "This lesson number already exists "
-                "in this section."
-            ),
+            detail="This lesson number already exists in this section.",
         )
-
-    # -----------------------------------------------------
-    # UPDATE DATABASE
-    # -----------------------------------------------------
 
     lesson.title = new_title.strip()
 
@@ -729,8 +728,8 @@ def update_lesson(
 
     lesson.lesson_number = new_lesson_number
 
-    # Only use this if your Lesson model has description.
     if hasattr(lesson, "description"):
+
         lesson.description = new_description
 
     try:
@@ -780,12 +779,14 @@ def watch_lesson(
     )
 
     if not lesson:
+
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Lesson not found.",
         )
 
     if not lesson.video_url:
+
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Video is not available for this lesson.",
@@ -881,7 +882,7 @@ async def upload_lesson_video(
     lesson_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user=Depends(admin_required),
+    current_user: dict = Depends(admin_required),
 ):
 
     lesson = (
@@ -893,12 +894,14 @@ async def upload_lesson_video(
     )
 
     if not lesson:
+
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Lesson not found.",
         )
 
     if not file.filename:
+
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No video file selected.",
@@ -908,6 +911,7 @@ async def upload_lesson_video(
         file.content_type
         and not file.content_type.startswith("video/")
     ):
+
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Please upload a valid video file.",
@@ -941,10 +945,6 @@ async def upload_lesson_video(
                 buffer,
             )
 
-        # -------------------------------------------------
-        # DELETE OLD VIDEO
-        # -------------------------------------------------
-
         if lesson.cloudinary_public_id:
 
             try:
@@ -959,10 +959,6 @@ async def upload_lesson_video(
                     "OLD CLOUDINARY VIDEO DELETE ERROR:",
                     e,
                 )
-
-        # -------------------------------------------------
-        # UPLOAD NEW VIDEO
-        # -------------------------------------------------
 
         result = upload_video_to_cloudinary(
             temp_path
@@ -999,19 +995,16 @@ async def upload_lesson_video(
         db.refresh(lesson)
 
         return {
-            "message":
-                "Video uploaded successfully.",
-            "lesson_id":
-                lesson.id,
-            "video_url":
-                lesson.video_url,
-            "public_id":
-                lesson.cloudinary_public_id,
+            "message": "Video uploaded successfully.",
+            "lesson_id": lesson.id,
+            "video_url": lesson.video_url,
+            "public_id": lesson.cloudinary_public_id,
         }
 
     except HTTPException:
 
         db.rollback()
+
         raise
 
     except Exception as e:
@@ -1033,13 +1026,18 @@ async def upload_lesson_video(
         if os.path.exists(temp_path):
 
             try:
+
                 os.remove(temp_path)
+
             except Exception:
                 pass
 
         try:
+
             await file.close()
+
         except Exception:
+
             pass
 
 
@@ -1055,7 +1053,7 @@ async def upload_lesson_video(
 def delete_lesson(
     lesson_id: int,
     db: Session = Depends(get_db),
-    current_user=Depends(admin_required),
+    current_user: dict = Depends(admin_required),
 ):
 
     lesson = (
@@ -1067,14 +1065,11 @@ def delete_lesson(
     )
 
     if not lesson:
+
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Lesson not found.",
         )
-
-    # -----------------------------------------------------
-    # DELETE CLOUDINARY VIDEO
-    # -----------------------------------------------------
 
     if lesson.cloudinary_public_id:
 
@@ -1090,10 +1085,6 @@ def delete_lesson(
                 "CLOUDINARY VIDEO DELETE ERROR:",
                 e,
             )
-
-    # -----------------------------------------------------
-    # DELETE LESSON
-    # -----------------------------------------------------
 
     try:
 
@@ -1116,8 +1107,6 @@ def delete_lesson(
         )
 
     return {
-        "message":
-            "Lesson deleted successfully.",
-        "lesson_id":
-            lesson_id,
+        "message": "Lesson deleted successfully.",
+        "lesson_id": lesson_id,
     }
