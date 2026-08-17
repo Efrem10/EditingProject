@@ -5,10 +5,19 @@ from pydantic import BaseModel, ConfigDict
 
 # ============================================================
 # CREATE LESSON
+#
 # POST /lesson/section/{section_id}
 #
 # section_id comes from the URL.
 # lesson_number is generated automatically by the backend.
+#
+# React sends:
+#
+# {
+#     "title": "Introduction to Django",
+#     "duration": "07:30",
+#     "is_free": false
+# }
 # ============================================================
 
 class LessonCreate(BaseModel):
@@ -22,6 +31,7 @@ class LessonCreate(BaseModel):
 
 # ============================================================
 # UPDATE LESSON
+#
 # PUT /lesson/lessons/{lesson_id}
 # ============================================================
 
