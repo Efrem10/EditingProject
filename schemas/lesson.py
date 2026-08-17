@@ -17,7 +17,6 @@ class LessonCreate(BaseModel):
 
     duration: Optional[str] = None
 
-
     is_free: bool = False
 
 
@@ -29,7 +28,6 @@ class LessonCreate(BaseModel):
 class LessonUpdate(BaseModel):
 
     title: Optional[str] = None
-
 
     duration: Optional[str] = None
 
