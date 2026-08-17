@@ -342,11 +342,6 @@ def create_lesson(
         section_id=section_id,
         title=title,
         duration=lesson.duration,
-        description=(
-            lesson.description.strip()
-            if lesson.description
-            else None
-        ),
         is_free=bool(lesson.is_free),
         lesson_number=lesson_number,
     )
@@ -464,11 +459,6 @@ def get_section_lessons(
 
             "duration": lesson.duration,
 
-            "description": getattr(
-                lesson,
-                "description",
-                None,
-            ),
 
             "video_url": (
                 lesson.video_url
@@ -591,11 +581,7 @@ def get_course_lessons(
 
                 "duration": lesson.duration,
 
-                "description": getattr(
-                    lesson,
-                    "description",
-                    None,
-                ),
+               
 
                 "video_url": (
                     lesson.video_url
